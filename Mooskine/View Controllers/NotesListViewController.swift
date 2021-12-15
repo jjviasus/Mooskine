@@ -20,18 +20,19 @@ class NotesListViewController: UIViewController {
 
     /// The notebook whose notes are being displayed
     var notebook: Notebook!
+    
     var dataController: DataController! // implicity unwrapping an optional means it is still optional and might be nil, but Swift eliminates the need for unwrapping
     var listDataSource: ListDataSource<Note, NoteCell>!
     var fetchedResultsController: NSFetchedResultsController<Note>!
     
-    // MARK: - Setup
-
     /// A date formatter for date text in note cells
     let dateFormatter: DateFormatter = {
         let df = DateFormatter()
         df.dateStyle = .medium
         return df
     }()
+    
+    // MARK: - Setup
     
     fileprivate func setUpDelegates() {
         // Set the required delegates
@@ -42,7 +43,7 @@ class NotesListViewController: UIViewController {
     fileprivate func setUpListDataSource(_ fetchRequest: NSFetchRequest<Note>) {
         // Instantiate the listDataSource
         listDataSource = ListDataSource(tableView: tableView, managedObjectContext: dataController.viewContext, fetchRequest: fetchRequest, configure: { note, cell in
-            cell.textPreviewLabel.text = note.text
+            cell.textPreviewLabel.attributedText = note.attributedText
                     if let creationDate = note.creationDate {
                         cell.dateLabel.text = self.dateFormatter.string(from: creationDate)
                     }
@@ -117,7 +118,7 @@ class NotesListViewController: UIViewController {
     func addNote() {
         let note = Note(context: dataController.viewContext)
         
-        note.text = "New Note"
+        note.attributedText = NSAttributedString(string: "New Note")
         note.creationDate = Date()
         note.notebook = self.notebook
         

@@ -104,6 +104,4 @@ class ListDataSource<ObjectType: NSManagedObject, CellType: UITableViewCell>: NS
     }
 }
 
-// TODO: create a ListDataSource in both view controllers and configure it as the table views' delegate. ???
-
 // TODO: extra credit: make sure you notify the view controllers after content updates have occured so that the state of the edit button updates when the UITableView changes its content.

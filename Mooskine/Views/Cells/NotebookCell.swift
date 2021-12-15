@@ -18,5 +18,4 @@ internal final class NotebookCell: UITableViewCell, Cell {
         nameLabel.text = nil
         pageCountLabel.text = nil
     }
-
 }

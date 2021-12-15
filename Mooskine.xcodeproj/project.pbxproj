@@ -157,8 +157,8 @@
 		03B2698F1F2F833D00C7433C /* View Controllers */ = {
 			isa = PBXGroup;
 			children = (
-				03B269901F2F833D00C7433C /* NotebooksListViewController.swift */,
 				03B269911F2F833D00C7433C /* NoteDetailsViewController.swift */,
+				03B269901F2F833D00C7433C /* NotebooksListViewController.swift */,
 				03B269921F2F833D00C7433C /* NotesListViewController.swift */,
 			);
 			path = "View Controllers";

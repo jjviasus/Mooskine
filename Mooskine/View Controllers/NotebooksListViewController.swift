@@ -9,41 +9,72 @@
 import UIKit
 import CoreData
 
-class NotebooksListViewController: UIViewController, UITableViewDataSource {
+class NotebooksListViewController: UIViewController {
+    
+    // MARK: - Outlets
+    
     /// A table view that displays a list of notebooks
     @IBOutlet weak var tableView: UITableView!
     
-    var dataController: DataController! // we are implicitly unwrapping it because we can count on this dependency being injected
+    // MARK: - Properties
     
+    var dataController: DataController! // we are implicitly unwrapping it because we can count on this dependency being injected
+    var listDataSource: ListDataSource<Notebook, NotebookCell>!
     var fetchedResultsController: NSFetchedResultsController<Notebook>!
     
+    // MARK: - Setup
+    
+    fileprivate func setUpDelegates() {
+        // Set the required delegates
+        tableView.dataSource = listDataSource
+        fetchedResultsController.delegate = listDataSource
+    }
+    
+    fileprivate func setUpListDataSource(_ fetchRequest: NSFetchRequest<Notebook>) {
+        // Instantiate the listDataSource
+        listDataSource = ListDataSource(tableView: tableView, managedObjectContext: dataController.viewContext, fetchRequest: fetchRequest, configure: { notebook, cell in
+            cell.nameLabel.text = notebook.name
+            if let count = notebook.notes?.count {
+                let pageString = count == 1 ? "page" : "pages"
+                cell.pageCountLabel.text = "\(count) \(pageString)"
+            }
+        })
+        
+        // Inject the data controller and fetched results controller dependencies into the listDataSource
+        listDataSource.dataController = dataController
+        listDataSource.fetchedResultsController = fetchedResultsController
+    }
+    
     fileprivate func setUpFetchedResultsController() {
+        // Create the fetch request
         let fetchRequest: NSFetchRequest<Notebook> = Notebook.fetchRequest()
         let sortDescriptor = NSSortDescriptor(key: "creationDate", ascending: false)
         fetchRequest.sortDescriptors = [sortDescriptor]
         
-        // we use this fetch request to instantiate the fetchedResultsController
+        // Instantiate the fetchedResultsController
         fetchedResultsController = NSFetchedResultsController(fetchRequest: fetchRequest, managedObjectContext: dataController.viewContext, sectionNameKeyPath: nil, cacheName: "notebooks")
-        fetchedResultsController.delegate = self
         do {
             try fetchedResultsController.performFetch()
         } catch {
             fatalError("The fetch could not be performed: \(error.localizedDescription)")
         }
+                
+        setUpListDataSource(fetchRequest)
+        setUpDelegates()
     }
+    
+    // MARK: - Lifecycle
     
     override func viewDidLoad() {
         super.viewDidLoad()
         navigationItem.titleView = UIImageView(image: #imageLiteral(resourceName: "toolbar-cow"))
         navigationItem.rightBarButtonItem = editButtonItem
-        
         setUpFetchedResultsController()
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         setUpFetchedResultsController()
-
         if let indexPath = tableView.indexPathForSelectedRow {
             tableView.deselectRow(at: indexPath, animated: false)
             tableView.reloadRows(at: [indexPath], with: .fade)
@@ -52,17 +83,15 @@ class NotebooksListViewController: UIViewController, UITableViewDataSource {
     
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
-        fetchedResultsController = nil
+        fetchedResultsController = nil //?
     }
 
-    // -------------------------------------------------------------------------
     // MARK: - Actions
 
     @IBAction func addTapped(sender: Any) {
         presentNewNotebookAlert()
     }
 
-    // -------------------------------------------------------------------------
     // MARK: - Editing
 
     /// Display an alert prompting the user to name a new notebook. Calls
@@ -125,41 +154,6 @@ class NotebooksListViewController: UIViewController, UITableViewDataSource {
         tableView.setEditing(editing, animated: animated)
     }
 
-    // -------------------------------------------------------------------------
-    // MARK: - Table view data source
-
-    func numberOfSections(in tableView: UITableView) -> Int {
-        // return count if it exists, 1 otherwise
-        return fetchedResultsController.sections?.count ?? 1
-    }
-
-    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return fetchedResultsController.sections?[section].numberOfObjects ?? 0
-    }
-
-    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let aNotebook = fetchedResultsController.object(at: indexPath)
-        let cell = tableView.dequeueReusableCell(withIdentifier: NotebookCell.defaultReuseIdentifier, for: indexPath) as! NotebookCell
-
-        // Configure cell
-        cell.nameLabel.text = aNotebook.name
-        if let count = aNotebook.notes?.count {
-            let pageString = count == 1 ? "page" : "pages"
-            cell.pageCountLabel.text = "\(count) \(pageString)"
-
-        }
-    
-        return cell
-    }
-
-    func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
-        switch editingStyle {
-        case .delete: deleteNotebook(at: indexPath)
-        default: () // Unsupported
-        }
-    }
-
-    // -------------------------------------------------------------------------
     // MARK: - Navigation
 
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
@@ -170,33 +164,6 @@ class NotebooksListViewController: UIViewController, UITableViewDataSource {
                 vc.notebook = fetchedResultsController.object(at: indexPath)
                 vc.dataController = dataController // dependency injection
             }
-        }
-    }
-}
-
-// MARK: NSFetchedResultsControllerDelegate
-
-extension NotebooksListViewController: NSFetchedResultsControllerDelegate {
-    
-    // gets called before a patch of updates
-    func controllerWillChangeContent(_ controller: NSFetchedResultsController<NSFetchRequestResult>) {
-        tableView.beginUpdates()
-    }
-    
-    // gets called after a patch of updates
-    func controllerDidChangeContent(_ controller: NSFetchedResultsController<NSFetchRequestResult>) {
-        tableView.endUpdates()
-    }
-    
-    // called whenever the fetched results controller receives a notification that an object has been added, deleted, or changed.
-    func controller(_ controller: NSFetchedResultsController<NSFetchRequestResult>, didChange anObject: Any, at indexPath: IndexPath?, for type: NSFetchedResultsChangeType, newIndexPath: IndexPath?) {
-        switch type {
-        case .insert:
-            tableView.insertRows(at: [newIndexPath!], with: .fade)
-        case .delete:
-            tableView.deleteRows(at: [indexPath!], with: .fade)
-        default:
-            break
         }
     }
 }

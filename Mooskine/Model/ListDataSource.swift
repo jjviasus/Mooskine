@@ -10,37 +10,25 @@ import Foundation
 import CoreData
 import UIKit
 
-// we have generic types ObjectType and CellType
-class ListDataSource<ObjectType: NSManagedObject, CellType: UITableViewCell>: NSObject, UITableViewDataSource, NSFetchedResultsControllerDelegate {
+// ObjectType such as Notebook, CellType such as NotebookCell.
+// Don't forget to set both tableView.dataSource and fetchedResultsController.delegate equal to this object.
+
+class ListDataSource<ObjectType: NSManagedObject, CellType: UITableViewCell>: NSObject, UITableViewDataSource, NSFetchedResultsControllerDelegate where CellType: Cell {
     
+    private var tableView: UITableView
+    private var configure: (ObjectType, CellType) -> Void
+    
+    // these rely on dependency injections
+    var dataController: DataController!
     var fetchedResultsController: NSFetchedResultsController<ObjectType>!
-    var configureCell: (CellType, ObjectType) -> Void
-    var context: NSManagedObjectContext
-    var tableView: UITableView
     
-    init(tableView: UITableView, managedObjectContext: NSManagedObjectContext, fetchRequest: NSFetchRequest<ObjectType>, configure: @escaping (CellType, ObjectType) -> Void) {
-        //super.init() ?
-        
-        //    let predicate = NSPredicate(format: "notebook == %@", notebook) // The predicate will ensure that we only fetch the notes for the selected notebook. %@ gets replaced by notebook at runtime.
-        //    fetchRequest.predicate = predicate
-        //    let sortDescriptor = NSSortDescriptor(key: "creationDate", ascending: true) // sort descriptor to sort by creation date
-        //    fetchRequest.sortDescriptors = [sortDescriptor]
-        
-        self.fetchedResultsController = NSFetchedResultsController(fetchRequest: fetchRequest, managedObjectContext: managedObjectContext, sectionNameKeyPath: nil, cacheName: nil) // cacheName?
-        //fetchedResultsController.delegate = self ?
-        
-        do {
-            try self.fetchedResultsController.performFetch()
-        } catch {
-            fatalError("The fetch could not be performed: \(error.localizedDescription)")
-        }
-        
-        self.configureCell = configure
-        self.context = managedObjectContext
+    init(tableView: UITableView, managedObjectContext: NSManagedObjectContext, fetchRequest: NSFetchRequest<ObjectType>, configure: @escaping (ObjectType, CellType) -> Void) {
         self.tableView = tableView
+        self.configure = configure
+        super.init()
     }
     
-    // MARK: - Table view data source
+    // MARK: - Table View Data Source
     
     func numberOfSections(in tableView: UITableView) -> Int {
         return fetchedResultsController.sections?.count ?? 1
@@ -52,10 +40,11 @@ class ListDataSource<ObjectType: NSManagedObject, CellType: UITableViewCell>: NS
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let object: ObjectType = fetchedResultsController.object(at: indexPath)
-        let cell: CellType = tableView.dequeueReusableCell(withIdentifier: String(describing: object), for: indexPath) as! CellType // TODO: may need to fix the withIdentifier
-        
+        print(object)
+        let cell: CellType = tableView.dequeueReusableCell(withIdentifier: CellType.defaultReuseIdentifier, for: indexPath) as! CellType
+
         // Configure cell
-        configureCell(cell, object)
+        configure(object, cell)
         
         return cell
     }
@@ -72,12 +61,12 @@ class ListDataSource<ObjectType: NSManagedObject, CellType: UITableViewCell>: NS
     func deleteObject(at indexPath: IndexPath) {
         // get a reference to the object to delete
         let objectToDelete = fetchedResultsController.object(at: indexPath)
-        
+
         // delete the object from the context
-        context.delete(objectToDelete)
-        
+        dataController.viewContext.delete(objectToDelete)
+
         // try saving the context
-        try? context.save() // save the context (error is not handled)
+        try? dataController.viewContext.save() // save the context (error is not handled)
     }
     
     // MARK: - Fetched Results Controller Delegate
@@ -91,9 +80,17 @@ class ListDataSource<ObjectType: NSManagedObject, CellType: UITableViewCell>: NS
     }
     
     // notifies the receiver of the addition or removal of a section
-    //    func controller(_ controller: NSFetchedResultsController<NSFetchRequestResult>, didChange sectionInfo: NSFetchedResultsSectionInfo, atSectionIndex sectionIndex: Int, for type: NSFetchedResultsChangeType) {
-    //        // do we need to implement this?
-    //    }
+    func controller(_ controller: NSFetchedResultsController<NSFetchRequestResult>, didChange sectionInfo: NSFetchedResultsSectionInfo, atSectionIndex sectionIndex: Int, for type: NSFetchedResultsChangeType) {
+        let indexSet = IndexSet(integer: sectionIndex)
+        switch type {
+        case .insert:
+            tableView.insertSections(indexSet, with: .fade)
+        case .delete:
+            tableView.deleteSections(indexSet, with: .fade)
+        case .update, .move:
+            fatalError("Invalid change type in controller(_:didChange:atSectionIndex:for:). Only .insert or .delete should be possible.")
+        }
+    }
     
     func controller(_ controller: NSFetchedResultsController<NSFetchRequestResult>, didChange anObject: Any, at indexPath: IndexPath?, for type: NSFetchedResultsChangeType, newIndexPath: IndexPath?) {
         switch type {
@@ -107,6 +104,6 @@ class ListDataSource<ObjectType: NSManagedObject, CellType: UITableViewCell>: NS
     }
 }
 
-// TODO: create a ListDataSource in both view controllers and configure it as the table views' delegate.
+// TODO: create a ListDataSource in both view controllers and configure it as the table views' delegate. ???
 
 // TODO: extra credit: make sure you notify the view controllers after content updates have occured so that the state of the edit button updates when the UITableView changes its content.

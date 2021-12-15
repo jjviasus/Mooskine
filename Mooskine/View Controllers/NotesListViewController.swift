@@ -9,16 +9,22 @@
 import UIKit
 import CoreData
 
-class NotesListViewController: UIViewController, UITableViewDataSource {
+class NotesListViewController: UIViewController {
+    
+    // MARK: - Outlets
+    
     /// A table view that displays a list of notes for a notebook
     @IBOutlet weak var tableView: UITableView!
+    
+    // MARK: - Properties
 
     /// The notebook whose notes are being displayed
     var notebook: Notebook!
-    
     var dataController: DataController! // implicity unwrapping an optional means it is still optional and might be nil, but Swift eliminates the need for unwrapping
-    
+    var listDataSource: ListDataSource<Note, NoteCell>!
     var fetchedResultsController: NSFetchedResultsController<Note>!
+    
+    // MARK: - Setup
 
     /// A date formatter for date text in note cells
     let dateFormatter: DateFormatter = {
@@ -26,18 +32,37 @@ class NotesListViewController: UIViewController, UITableViewDataSource {
         df.dateStyle = .medium
         return df
     }()
+    
+    fileprivate func setUpDelegates() {
+        // Set the required delegates
+        tableView.dataSource = listDataSource
+        fetchedResultsController.delegate = listDataSource
+    }
+    
+    fileprivate func setUpListDataSource(_ fetchRequest: NSFetchRequest<Note>) {
+        // Instantiate the listDataSource
+        listDataSource = ListDataSource(tableView: tableView, managedObjectContext: dataController.viewContext, fetchRequest: fetchRequest, configure: { note, cell in
+            cell.textPreviewLabel.text = note.text
+                    if let creationDate = note.creationDate {
+                        cell.dateLabel.text = self.dateFormatter.string(from: creationDate)
+                    }
+        })
+        
+        // Inject the data controller and fetched results controller dependencies into the listDataSource
+        listDataSource.dataController = dataController
+        listDataSource.fetchedResultsController = fetchedResultsController
+    }
 
     fileprivate func setupFetchedResultsController() {
+        // Create the fetch request
         let fetchRequest: NSFetchRequest<Note> = Note.fetchRequest()
         let predicate = NSPredicate(format: "notebook == %@", notebook) // The predicate will ensure that we only fetch the notes for the selected notebook. %@ gets replaced by notebook at runtime.
         fetchRequest.predicate = predicate
         let sortDescriptor = NSSortDescriptor(key: "creationDate", ascending: true) // sort descriptor to sort by creation date
         fetchRequest.sortDescriptors = [sortDescriptor]
         
+        // Instantiate the fetchedResultsController
         fetchedResultsController = NSFetchedResultsController(fetchRequest: fetchRequest, managedObjectContext: dataController.viewContext, sectionNameKeyPath: nil, cacheName: "\(notebook.name ?? "notebook name")")
-        
-        fetchedResultsController.delegate = self
-        
         do {
             try fetchedResultsController.performFetch()
         } catch {
@@ -47,7 +72,12 @@ class NotesListViewController: UIViewController, UITableViewDataSource {
         // NSFetchRequest -> SELECT Query
         // NSPredicate -> WHERE clause
         // NSSortDescriptors -> ORDER BY
+        
+        setUpListDataSource(fetchRequest)
+        setUpDelegates()
     }
+    
+    // MARK: - Lifecycle
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -75,14 +105,12 @@ class NotesListViewController: UIViewController, UITableViewDataSource {
         fetchedResultsController = nil
     }
 
-    // -------------------------------------------------------------------------
     // MARK: - Actions
 
     @IBAction func addTapped(sender: Any) {
         addNote()
     }
 
-    // -------------------------------------------------------------------------
     // MARK: - Editing
 
     // Adds a new `Note` to the end of the `notebook`'s `notes` array
@@ -119,38 +147,6 @@ class NotesListViewController: UIViewController, UITableViewDataSource {
         tableView.setEditing(editing, animated: animated)
     }
 
-    // -------------------------------------------------------------------------
-    // MARK: - Table view data source
-
-    func numberOfSections(in tableView: UITableView) -> Int {
-        return fetchedResultsController.sections?.count ?? 1
-    }
-
-    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return fetchedResultsController.sections?[section].numberOfObjects ?? 0
-    }
-
-    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let aNote = fetchedResultsController.object(at: indexPath)
-        let cell = tableView.dequeueReusableCell(withIdentifier: NoteCell.defaultReuseIdentifier, for: indexPath) as! NoteCell
-
-        // Configure cell
-        cell.textPreviewLabel.text = aNote.text
-        if let creationDate = aNote.creationDate {
-            cell.dateLabel.text = dateFormatter.string(from: creationDate)
-        }
-
-        return cell
-    }
-
-    func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
-        switch editingStyle {
-        case .delete: deleteNote(at: indexPath)
-        default: () // Unsupported
-        }
-    }
-
-    // -------------------------------------------------------------------------
     // MARK: - Navigation
 
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
@@ -168,33 +164,6 @@ class NotesListViewController: UIViewController, UITableViewDataSource {
                     }
                 }
             }
-        }
-    }
-}
-
-extension NotesListViewController: NSFetchedResultsControllerDelegate {
-    
-    func controllerWillChangeContent(_ controller: NSFetchedResultsController<NSFetchRequestResult>) {
-        tableView.beginUpdates()
-    }
-    
-    func controllerDidChangeContent(_ controller: NSFetchedResultsController<NSFetchRequestResult>) {
-        tableView.endUpdates()
-    }
-    
-    // notifies the receiver of the addition or removal of a section
-//    func controller(_ controller: NSFetchedResultsController<NSFetchRequestResult>, didChange sectionInfo: NSFetchedResultsSectionInfo, atSectionIndex sectionIndex: Int, for type: NSFetchedResultsChangeType) {
-//        // do we need to implement this?
-//    }
-    
-    func controller(_ controller: NSFetchedResultsController<NSFetchRequestResult>, didChange anObject: Any, at indexPath: IndexPath?, for type: NSFetchedResultsChangeType, newIndexPath: IndexPath?) {
-        switch type {
-        case .insert:
-            tableView.insertRows(at: [newIndexPath!], with: .fade)
-        case .delete:
-            tableView.deleteRows(at: [indexPath!], with: .fade)
-        default:
-            break
         }
     }
 }
